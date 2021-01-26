@@ -86,10 +86,10 @@ modes = [w.strip() for w in input(
 list_m("operation modes", modes)
 while (cont := input("\nare the operations modes correct? (y/n/cancel)").lower()) not in {"y", "yes"}:
 
-    if cont.lower() in {"n", "no"}:
-        modes = input(
-            "Type AC operation modes separated by ','(comma): ").split(",")
-    elif cont.lower() == "cancel":
+    if cont in {"n", "no"}:
+        modes = [w.strip() for w in input(
+            "\nType AC operation modes separated by ','(comma): ").split(",")]
+    elif cont == "cancel":
         sys.exit()
     else:
         print("Invalid answer")
@@ -101,10 +101,10 @@ fan_modes = [w.strip() for w in input(
 list_m("fan modes", fan_modes)
 while (cont := input("are the fan modes correct? (y/n/cancel)").lower()) not in {"y", "yes"}:
 
-    if cont.lower() in {"n", "no"}:
-        fan_modes = input(
-            "Type AC fan modes separated by ','(comma): ").split(",")
-    elif cont.lower() == "cancel":
+    if cont in {"n", "no"}:
+        fan_modes = [w.strip() for w in input(
+            "Type AC fan modes separated by ','(comma): ").split(",")]
+    elif cont == "cancel":
         sys.exit()
     else:
         print("Invalid answer")
@@ -172,6 +172,6 @@ for mode in modes:
 print("all commands learned.")
 
 with open("3300.JSON", "w") as file:
-    json.dump(data, file)
+    json.dump(data, file, indent=4)
 
 print("file saved.")
