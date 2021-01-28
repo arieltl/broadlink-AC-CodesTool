@@ -1,3 +1,4 @@
+
 import broadlink
 import sys
 import base64
@@ -5,7 +6,8 @@ import codecs
 import time
 import json
 from broadlink.exceptions import ReadError, StorageError
-
+from itertools import product, starmap
+from collections import namedtuple
 TICK = 32.84
 TIMEOUT = 30
 IR_TOKEN = 0x26
@@ -45,7 +47,7 @@ def to_microseconds(bytes):
 
 def learn_cmd(dev):
     dev.enter_learning()
-    print("Learning...")
+    print("Wainting command...")
     start = time.time()
     while time.time() - start < TIMEOUT:
         time.sleep(1)
@@ -64,7 +66,15 @@ def learn_cmd(dev):
     return str(base64.b64encode(decode_hex(learned)[0]))[2:-1] + "=="
 
 
-while len(devices := broadlink.discover(timeout=5, discover_ip_address=input("broadlink controller IP adress:"))) < 1:
+# Gemnerate list of commands. This way the command learning logic doesnt have to be in nested loops.
+# It also allows easy acess to the next command before the next loop iteration improving user experience.
+# It will also make it easier to add preset modes support to the JSON file later.
+def gen_cmd_list(data, mode_types, header_simple_cmds=["off"], footer_simple_cmds=[]):
+    cmd_template = namedtuple("cmd", mode_types)
+    return header_simple_cmds + list(starmap(cmd_template, product(*data))) + footer_simple_cmds
+
+
+while len(devices := broadlink.discover(timeout=5, discover_ip_address=input("broadlink controller IP adress: "))) < 1:
     while (cont := input("No device found. Do you wish to try again?(y/n)").lower()) not in {"y", "yes", "n", "no"}:
         print("Invalid Answer")
     if cont.lower() in {"n", "no"}:
@@ -83,8 +93,8 @@ print(f"Connected to {host}")
 modes = [w.strip() for w in input(
     "\nType AC operation modes separated by ','(comma): ").split(",")]
 
-list_m("operation modes", modes)
-while (cont := input("\nare the operations modes correct? (y/n/cancel)").lower()) not in {"y", "yes"}:
+list_m("Operation modes", modes)
+while (cont := input("\nAre the operations modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
 
     if cont in {"n", "no"}:
         modes = [w.strip() for w in input(
@@ -93,17 +103,17 @@ while (cont := input("\nare the operations modes correct? (y/n/cancel)").lower()
         sys.exit()
     else:
         print("Invalid answer")
-    list_m("operation modes", modes)
+    list_m("Operation modes", modes)
 
 fan_modes = [w.strip() for w in input(
-    "Type AC fan modes separated by ','(comma): ").split(",")]
+    "\nType AC fan modes separated by ','(comma): ").split(",")]
 
-list_m("fan modes", fan_modes)
-while (cont := input("are the fan modes correct? (y/n/cancel)").lower()) not in {"y", "yes"}:
+list_m("Fan modes", fan_modes)
+while (cont := input("\nAre the fan modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
 
     if cont in {"n", "no"}:
         fan_modes = [w.strip() for w in input(
-            "Type AC fan modes separated by ','(comma): ").split(",")]
+            "\nType AC fan modes separated by ','(comma): ").split(",")]
     elif cont == "cancel":
         sys.exit()
     else:
@@ -113,7 +123,7 @@ min_temp = None
 
 while not min_temp:
     try:
-        temp = int(input("\n\nType minimum temparature of your ac:"))
+        temp = int(input("\n\nType minimum temparature of your ac: "))
     except ValueError:
         print("Not a valid integer number.")
         continue
@@ -122,14 +132,13 @@ while not min_temp:
 max_temp = None
 while not max_temp:
     try:
-        temp = int(input("\n\nType maximum temparature of your ac:"))
+        temp = int(input("\n\nType maximum temparature of your ac: "))
     except ValueError:
         print("Not a valid integer number.")
         continue
     max_temp = temp
+print("\n")
 
-
-print(min_temp, max_temp)
 data = {"manufacturer": "Custom",
         "supportedModels": [
             "Custom"
@@ -138,38 +147,70 @@ data = {"manufacturer": "Custom",
         "supportedController": "Broadlink",
         "minTemperature": min_temp,
         "maxTemperature": max_temp,
-        "precision": 1, }
+        "precision": 1,
+        "operationModes": modes,
+        "fanModes": fan_modes,
+        }
+data["commands"] = dict()
+learned_all = False
+cmds = gen_cmd_list([modes, fan_modes, range(
+    min_temp, max_temp+1)], ["mode", "fan_mode", "temp"])
+n_cmds = len(cmds)
 
-input("Press ENTER to learn off command")
-while(cmd := learn_cmd(device)) == "":
-    print("No data received")
-    input("press ENTER to try leaning OFF again.")
-data["commands"] = {"off": cmd}
 
-for mode in modes:
-    data["commands"][mode] = dict()
-    for fan_mode in fan_modes:
-        data["commands"][mode][fan_mode] = dict()
-        temp = min_temp
-        print(f"\nmode: {mode}, fan mode: {fan_mode}")
-        input(f"press ENTER to learn next command.")
-        while temp in range(min_temp, max_temp+1):
+cmd = cmds[0]
+if isinstance(cmd, str):
+    print("Next command: " + cmd)
+else:
+    print(
+        f"Next command: \nMode: {cmd.mode}, Fan Mode: {cmd.fan_mode}, Temperature: {cmd.temp}")
+
+i = 0
+input("Press ENTER to learn next command. \n \n")
+
+while i in range(n_cmds):
+    cmd = cmds[i]
+    if isinstance(cmd, str):
+        print("Learning command: " + cmd)
+    else:
+        print(
+            f"Learning command: \nMode: {cmd.mode}, Fan Mode: {cmd.fan_mode}, Temperature: {cmd.temp}")
+
+    while (cmd_code := learn_cmd(device)) == "":
+        print("No data received")
+        input("Press ENTER to try again \n")
+        continue
+
+    print("Learned Command. \n")
+
+    learned_all = i == n_cmds - 1
+
+    if not learned_all:
+        nxt_cmd = cmds[i+1]
+        if isinstance(nxt_cmd, str):
+            print("Next command: " + nxt_cmd)
+
+        else:
             print(
-                f"\n\nwaiting for mode: {mode}, fan: {fan_mode}, temp:{temp} command")
-            while (cmd := learn_cmd(device)) == "":
-                print("No data received")
-                input("Press ENTER to try again")
-                continue
-            else:
-                print("\nLearned Command.")
-                print(f"press ENTER to learn next command.")
-                if input("type 'retry'or 'r' to relearn this command").lower() in {"retry", "r"}:
-                    continue
-                else:
-                    data["commands"][mode][fan_mode][temp] = cmd
-                    temp += 1
+                f"Next command: \nMode: {nxt_cmd.mode}, Fan Mode: {nxt_cmd.fan_mode}, Temperature: {nxt_cmd.temp}")
 
-print("all commands learned.")
+        print(f"Press ENTER to learn next command.")
+
+    if not learned_all and (input("type 'retry'or 'r' to relearn previous command\n").lower() in {"retry", "r"}):
+        continue
+    elif isinstance(cmd, str):
+        data["commands"][cmd] = cmd_code
+    else:
+        data["commands"][cmd.mode] = data["commands"].get(cmd.mode, dict())
+        data["commands"][cmd.mode][cmd.fan_mode] = data["commands"][cmd.mode].get(
+            cmd.fan_mode, dict())
+
+        data["commands"][cmd.mode][cmd.fan_mode][cmd.temp] = cmd_code
+    i += 1
+
+
+if learned_all:
+    print("All commands learned")
 
 with open("3300.JSON", "w") as file:
     json.dump(data, file, indent=4)
