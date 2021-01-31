@@ -47,7 +47,7 @@ def to_microseconds(bytes):
 
 def learn_cmd(dev):
     dev.enter_learning()
-    print("Wainting command...")
+    print("Waiting command...")
     start = time.time()
     while time.time() - start < TIMEOUT:
         time.sleep(1)
@@ -71,7 +71,7 @@ def learn_cmd(dev):
 # It will also make it easier to add preset modes support to the JSON file later.
 def gen_cmd_list(data, mode_types, header_simple_cmds=["off"], footer_simple_cmds=[]):
     cmd_template = namedtuple("cmd", mode_types)
-    return header_simple_cmds + list(starmap(cmd_template, product(*data))) + footer_simple_cmds
+    return header_simple_cmds + [dict(zip(mode_types, cmd)) for cmd in product(*data)] + footer_simple_cmds
 
 
 while len(devices := broadlink.discover(timeout=5, discover_ip_address=input("broadlink controller IP adress: "))) < 1:
@@ -153,8 +153,9 @@ data = {"manufacturer": "Custom",
         }
 data["commands"] = dict()
 learned_all = False
+hierarchy = ["mode", "fan_mode", "temp"]
 cmds = gen_cmd_list([modes, fan_modes, range(
-    min_temp, max_temp+1)], ["mode", "fan_mode", "temp"])
+    min_temp, max_temp+1)], hierarchy)
 n_cmds = len(cmds)
 
 
@@ -163,7 +164,7 @@ if isinstance(cmd, str):
     print("Next command: " + cmd)
 else:
     print(
-        f"Next command: \nMode: {cmd.mode}, Fan Mode: {cmd.fan_mode}, Temperature: {cmd.temp}")
+        f"Next command: \nMode: {cmd['mode']}, Fan Mode: {cmd['fan_mode']}, Temperature: {cmd['temp']}")
 
 i = 0
 input("Press ENTER to learn next command. \n \n")
@@ -174,7 +175,7 @@ while i in range(n_cmds):
         print("Learning command: " + cmd)
     else:
         print(
-            f"Learning command: \nMode: {cmd.mode}, Fan Mode: {cmd.fan_mode}, Temperature: {cmd.temp}")
+            f"Learning command: \nMode: {cmd['mode']}, Fan Mode: {cmd['fan_mode']}, Temperature: {cmd['temp']}")
 
     while (cmd_code := learn_cmd(device)) == "":
         print("No data received")
@@ -192,7 +193,7 @@ while i in range(n_cmds):
 
         else:
             print(
-                f"Next command: \nMode: {nxt_cmd.mode}, Fan Mode: {nxt_cmd.fan_mode}, Temperature: {nxt_cmd.temp}")
+                f"Next command: \nMode: {nxt_cmd['mode']}, Fan Mode: {nxt_cmd['fan_mode']}, Temperature: {nxt_cmd['temp']}")
 
         print(f"Press ENTER to learn next command.")
 
@@ -201,11 +202,11 @@ while i in range(n_cmds):
     elif isinstance(cmd, str):
         data["commands"][cmd] = cmd_code
     else:
-        data["commands"][cmd.mode] = data["commands"].get(cmd.mode, dict())
-        data["commands"][cmd.mode][cmd.fan_mode] = data["commands"][cmd.mode].get(
-            cmd.fan_mode, dict())
-
-        data["commands"][cmd.mode][cmd.fan_mode][cmd.temp] = cmd_code
+        cmds_data = data["commands"]
+        for cmd_path in hierarchy[:-1]:
+            cmds_data[cmd[cmd_path]] = cmds_data.get(cmd[cmd_path], dict())
+            cmds_data = cmds_data[cmd[cmd_path]]
+        cmds_data[cmd["temp"]] = cmd_code
     i += 1
 
 
