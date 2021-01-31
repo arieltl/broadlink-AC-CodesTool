@@ -1,10 +1,12 @@
 
 import broadlink
 import sys
+import glob
 import base64
 import codecs
 import time
 import json
+from copy import copy
 from broadlink.exceptions import ReadError, StorageError
 from itertools import product, starmap
 from collections import namedtuple
@@ -92,45 +94,110 @@ if not device.auth():
 
 host = device.host[0]
 print(f"Connected to {host}")
+list_m("\nTool Modes", ["Create new codes file", "Add swing to existing file"])
+converting = False
+while (cont := input("\nChoose Tool Mode (1 / 2): ").lower().strip()) not in {"1", "2"}:
+    print("Invalid answer. Please choose 1 or 2.")
+if cont == "1":
 
-modes = [w.strip() for w in input(
-    "\nType AC operation modes separated by ','(comma): ").split(",")]
+    modes = [w.strip() for w in input(
+        "\nType AC operation modes separated by ','(comma): ").split(",")]
 
-list_m("Operation modes", modes)
-while (cont := input("\nAre the operations modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
-
-    if cont in {"n", "no"}:
-        modes = [w.strip() for w in input(
-            "\nType AC operation modes separated by ','(comma): ").split(",")]
-    elif cont == "cancel":
-        sys.exit()
-    else:
-        print("Invalid answer")
     list_m("Operation modes", modes)
+    while (cont := input("\nAre the operations modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
 
-fan_modes = [w.strip() for w in input(
-    "\nType AC fan modes separated by ','(comma): ").split(",")]
+        if cont in {"n", "no"}:
+            modes = [w.strip() for w in input(
+                "\nType AC operation modes separated by ','(comma): ").split(",")]
+        elif cont == "cancel":
+            sys.exit()
+        else:
+            print("Invalid answer")
+        list_m("Operation modes", modes)
 
-list_m("Fan modes", fan_modes)
-while (cont := input("\nAre the fan modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
+    fan_modes = [w.strip() for w in input(
+        "\nType AC fan modes separated by ','(comma): ").split(",")]
 
-    if cont in {"n", "no"}:
-        fan_modes = [w.strip() for w in input(
-            "\nType AC fan modes separated by ','(comma): ").split(",")]
-    elif cont == "cancel":
-        sys.exit()
-    else:
-        print("Invalid answer")
     list_m("Fan modes", fan_modes)
+    while (cont := input("\nAre the fan modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
 
-while (cont := input("\nDo you want to add swing modes? (y/n) ").lower()) not in {"y", "yes", "no", "n"}:
-    print("Invalid answer")
+        if cont in {"n", "no"}:
+            fan_modes = [w.strip() for w in input(
+                "\nType AC fan modes separated by ','(comma): ").split(",")]
+        elif cont == "cancel":
+            sys.exit()
+        else:
+            print("Invalid answer")
+        list_m("Fan modes", fan_modes)
 
-swing = False
-if cont in {"y", "yes"}:
+    while (cont := input("\nDo you want to add swing modes? (y/n) ").lower()) not in {"y", "yes", "no", "n"}:
+        print("Invalid answer")
+
+    swing = False
+    if cont in {"y", "yes"}:
+        swing = True
+        swing_modes = [w.strip() for w in input(
+            "\nType AC swing modes separated by ','(comma): ").split(",")]
+
+        list_m("Swing modes", swing_modes)
+        while (cont := input("\nAre the swing modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
+
+            if cont in {"n", "no"}:
+                swing_modes = [w.strip() for w in input(
+                    "\nType AC swing modes separated by ','(comma): ").split(",")]
+            elif cont == "cancel":
+                sys.exit()
+            else:
+                print("Invalid answer")
+            list_m("Swing modes", swing_modes)
+
+    min_temp = None
+
+    while not min_temp:
+        try:
+            temp = int(input("\n\nType minimum temparature of your ac: "))
+        except ValueError:
+            print("Not a valid integer number.")
+            continue
+        min_temp = temp
+
+    max_temp = None
+    while not max_temp:
+        try:
+            temp = int(input("\n\nType maximum temparature of your ac: "))
+        except ValueError:
+            print("Not a valid integer number.")
+            continue
+        max_temp = temp
+    print("\n")
+    data = {"manufacturer": "Custom",
+            "supportedModels": [
+                "Custom"
+            ],
+            "commandsEncoding": "Base64",
+            "supportedController": "Broadlink",
+            "minTemperature": min_temp,
+            "maxTemperature": max_temp,
+            "precision": 1,
+            "operationModes": modes,
+            "fanModes": fan_modes,
+            }
+else:
+    converting = True
+    print("Place your Codes json file on the same file as this script.")
+    print("Make sure its the only json file on the directory.")
+    input("Press ENTER to continue.")
+
+    file_name = glob.glob("*.json")[0]
+    with open(file_name, "r") as file:
+        data = json.load(file)
+    modes = data["operationModes"]
+    fan_modes = data["fanModes"]
+    min_temp = data["minTemperature"]
+    max_temp = data["maxTemperature"]
     swing = True
     swing_modes = [w.strip() for w in input(
-        "\nType AC swing modes separated by ','(comma): ").split(",")]
+        "\nType AC swing modes separated by ','(comma)\nThe first mode listed will be assigned the codes from the current file (this should usually be off mode): ").split(",")]
 
     list_m("Swing modes", swing_modes)
     while (cont := input("\nAre the swing modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
@@ -144,38 +211,14 @@ if cont in {"y", "yes"}:
             print("Invalid answer")
         list_m("Swing modes", swing_modes)
 
-min_temp = None
+    for o_mode in data["commands"]:
+        if o_mode != "off":
+            for f_mode in data["commands"][o_mode]:
+                temp_dict = copy(data["commands"][o_mode][f_mode])
+                data["commands"][o_mode][f_mode].clear()
+                data["commands"][o_mode][f_mode][swing_modes[0]] = temp_dict
 
-while not min_temp:
-    try:
-        temp = int(input("\n\nType minimum temparature of your ac: "))
-    except ValueError:
-        print("Not a valid integer number.")
-        continue
-    min_temp = temp
 
-max_temp = None
-while not max_temp:
-    try:
-        temp = int(input("\n\nType maximum temparature of your ac: "))
-    except ValueError:
-        print("Not a valid integer number.")
-        continue
-    max_temp = temp
-print("\n")
-
-data = {"manufacturer": "Custom",
-        "supportedModels": [
-            "Custom"
-        ],
-        "commandsEncoding": "Base64",
-        "supportedController": "Broadlink",
-        "minTemperature": min_temp,
-        "maxTemperature": max_temp,
-        "precision": 1,
-        "operationModes": modes,
-        "fanModes": fan_modes,
-        }
 hierarchy = ["Mode", "Fan Mode", "Temperature"]
 cmds_modes = [modes, fan_modes, range(
     min_temp, max_temp+1)]
@@ -183,10 +226,14 @@ if swing:
     data["swingModes"] = swing_modes
     hierarchy.insert(2, "Swing Mode")
     cmds_modes.insert(2, swing_modes)
-cmds = gen_cmd_list(cmds_modes, hierarchy)
 
 
-data["commands"] = dict()
+if converting:
+    cmds_modes[2] = swing_modes[1:]
+    cmds = gen_cmd_list(cmds_modes, hierarchy, header_simple_cmds=[])
+else:
+    cmds = gen_cmd_list(cmds_modes, hierarchy)
+    data["commands"] = dict()
 learned_all = False
 
 

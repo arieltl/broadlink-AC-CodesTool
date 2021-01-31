@@ -2,7 +2,7 @@
 
 Python CLI toool to generate IR climate codes table. Currently the generated files are compatible with SmartIR.
 Keep in mind you can only use the operation modes supported by home assistant climate component: **cool, heat, heat_cool, auto, dry and fan_only** . As far as I can tell SmartIR doesn't support swing or preset modes (Eco, comfort, sleep, etc.) but im working on solution for it read more at the end of the page.
-**SmartIR now has swing support (still no preset modes), this tool can now also generate files with swing support and a feature for adding swing support to an existing json file is coming soon.**
+**SmartIR now has swing support (still no preset modes), this tool can now also generate files with swing support and also add swing support to an existing json file.**
 
 ## Instalation
 
@@ -26,6 +26,7 @@ Keep in mind you can only use the operation modes supported by home assistant cl
 
 ## Preset modes support
 
+This project is on hold for now beacuse it seems SmartIR will soon support preset modes.
 Im working on making either a custom component or an appdaemon app to implement presets modes for broadlink controller ac. I just started reading home assistant docs on creating integrations so it might take a while.
 I would like to comment that if you're interested in this keep in mind that given the nature of AC ir controllers using swing or preset modes will exponetially increase the amount of codes you neet to record.
 Using all 6 operations modes with an AC that goes from 16° to 30°C has 4 fan speeds plus vertical swing plus a couple preset modes would require you to record 2160 codes. But I live in a hot climate so I only use cool and dry modes,
