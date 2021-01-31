@@ -70,8 +70,11 @@ def learn_cmd(dev):
 # It also allows easy acess to the next command before the next loop iteration improving user experience.
 # It will also make it easier to add preset modes support to the JSON file later.
 def gen_cmd_list(data, mode_types, header_simple_cmds=["off"], footer_simple_cmds=[]):
-    cmd_template = namedtuple("cmd", mode_types)
     return header_simple_cmds + [dict(zip(mode_types, cmd)) for cmd in product(*data)] + footer_simple_cmds
+
+
+def gen_cmd_desc(cmd):
+    return " ".join([f"{name}: {value};" for name, value in cmd.items()])
 
 
 while len(devices := broadlink.discover(timeout=5, discover_ip_address=input("broadlink controller IP adress: "))) < 1:
@@ -118,7 +121,29 @@ while (cont := input("\nAre the fan modes correct? (y/n/cancel) ").lower()) not 
         sys.exit()
     else:
         print("Invalid answer")
-    list_m("fan modes", fan_modes)
+    list_m("Fan modes", fan_modes)
+
+while (cont := input("\nDo you want to add swing modes? (y/n) ").lower()) not in {"y", "yes", "no", "n"}:
+    print("Invalid answer")
+
+swing = False
+if cont in {"y", "yes"}:
+    swing = True
+    swing_modes = [w.strip() for w in input(
+        "\nType AC swing modes separated by ','(comma): ").split(",")]
+
+    list_m("Swing modes", swing_modes)
+    while (cont := input("\nAre the swing modes correct? (y/n/cancel) ").lower()) not in {"y", "yes"}:
+
+        if cont in {"n", "no"}:
+            swing_modes = [w.strip() for w in input(
+                "\nType AC swing modes separated by ','(comma): ").split(",")]
+        elif cont == "cancel":
+            sys.exit()
+        else:
+            print("Invalid answer")
+        list_m("Swing modes", swing_modes)
+
 min_temp = None
 
 while not min_temp:
@@ -151,11 +176,20 @@ data = {"manufacturer": "Custom",
         "operationModes": modes,
         "fanModes": fan_modes,
         }
+hierarchy = ["Mode", "Fan Mode", "Temperature"]
+cmds_modes = [modes, fan_modes, range(
+    min_temp, max_temp+1)]
+if swing:
+    data["swingModes"] = swing_modes
+    hierarchy.insert(2, "Swing Mode")
+    cmds_modes.insert(2, swing_modes)
+cmds = gen_cmd_list(cmds_modes, hierarchy)
+
+
 data["commands"] = dict()
 learned_all = False
-hierarchy = ["mode", "fan_mode", "temp"]
-cmds = gen_cmd_list([modes, fan_modes, range(
-    min_temp, max_temp+1)], hierarchy)
+
+
 n_cmds = len(cmds)
 
 
@@ -164,7 +198,7 @@ if isinstance(cmd, str):
     print("Next command: " + cmd)
 else:
     print(
-        f"Next command: \nMode: {cmd['mode']}, Fan Mode: {cmd['fan_mode']}, Temperature: {cmd['temp']}")
+        f"Next command: \n" + gen_cmd_desc(cmd))
 
 i = 0
 input("Press ENTER to learn next command. \n \n")
@@ -175,7 +209,7 @@ while i in range(n_cmds):
         print("Learning command: " + cmd)
     else:
         print(
-            f"Learning command: \nMode: {cmd['mode']}, Fan Mode: {cmd['fan_mode']}, Temperature: {cmd['temp']}")
+            f"Learning command: \n" + gen_cmd_desc(cmd))
 
     while (cmd_code := learn_cmd(device)) == "":
         print("No data received")
@@ -193,7 +227,7 @@ while i in range(n_cmds):
 
         else:
             print(
-                f"Next command: \nMode: {nxt_cmd['mode']}, Fan Mode: {nxt_cmd['fan_mode']}, Temperature: {nxt_cmd['temp']}")
+                f"Next command: \n" + gen_cmd_desc(nxt_cmd))
 
         print(f"Press ENTER to learn next command.")
 
@@ -206,14 +240,14 @@ while i in range(n_cmds):
         for cmd_path in hierarchy[:-1]:
             cmds_data[cmd[cmd_path]] = cmds_data.get(cmd[cmd_path], dict())
             cmds_data = cmds_data[cmd[cmd_path]]
-        cmds_data[cmd["temp"]] = cmd_code
+        cmds_data[cmd["Temperature"]] = cmd_code
     i += 1
 
 
 if learned_all:
     print("All commands learned")
 
-with open("3300.JSON", "w") as file:
+with open("3300.json", "w") as file:
     json.dump(data, file, indent=4)
 
 print("file saved.")

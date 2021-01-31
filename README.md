@@ -2,14 +2,13 @@
 
 Python CLI toool to generate IR climate codes table. Currently the generated files are compatible with SmartIR.
 Keep in mind you can only use the operation modes supported by home assistant climate component: **cool, heat, heat_cool, auto, dry and fan_only** . As far as I can tell SmartIR doesn't support swing or preset modes (Eco, comfort, sleep, etc.) but im working on solution for it read more at the end of the page.
-**SmartIR now has swing support (still no preset modes), this tool can't generate files with swing support yet but this feature will be added very soon**
+**SmartIR now has swing support (still no preset modes), this tool can now also generate files with swing support and a feature for adding swing support to an existing json file is coming soon.**
 
 ## Instalation
 
 1.  install python
 2.  install broadlink library
-      
-     pip install broadlink
+    pip install broadlink
 3.  Download Python file from github
 
 ## Usage
